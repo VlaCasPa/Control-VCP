@@ -25,6 +25,8 @@
             --info-bg: #e1effe;
             --info-text: #1e429f;
             --critical: #e02424;
+            --critical-bg: #fff5f5;
+            --closed-bar: #6b7280;
         }
 
         * {
@@ -222,6 +224,9 @@
 
         .task-card.is-critica {
             border-left-color: var(--critical);
+            border-color: #f6c6c6;
+            background: var(--critical-bg);
+            box-shadow: 0 4px 12px rgba(224,36,36,0.15);
         }
 
         .task-card.is-cerrada {
@@ -232,31 +237,56 @@
             opacity: 0.85;
         }
 
+        /* Barra superior: SIEMPRE muestra primero a qué estructura pertenece la gestión.
+           Su color cambia según el estado (normal / crítica / cerrada) para reforzar
+           la lectura visual sin depender solo del color (lleva también una etiqueta de texto). */
+        .card-structure-bar {
+            background: var(--primary);
+            color: #ffffff;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .task-card.is-critica .card-structure-bar {
+            background: var(--critical);
+        }
+
+        .task-card.is-cerrada .card-structure-bar {
+            background: var(--closed-bar);
+        }
+
+        .critica-motivo {
+            background: #fdeaea;
+            color: var(--danger-text);
+            padding: 8px 16px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-bottom: 1px solid #f6c6c6;
+            line-height: 1.4;
+        }
+
         .task-header {
             padding: 14px 16px;
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             border-bottom: 1px solid var(--border);
-            background: #fafbfc;
+            background: rgba(0,0,0,0.015);
             gap: 10px;
         }
 
         .task-meta {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 4px;
+            gap: 6px;
+            margin-bottom: 6px;
             flex-wrap: wrap;
-        }
-
-        .badge-loc {
-            background: #1e3a8a;
-            color: #ffffff;
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-size: 0.72rem;
-            font-weight: 700;
         }
 
         .badge-entity {
@@ -266,15 +296,6 @@
             border-radius: 6px;
             font-size: 0.72rem;
             font-weight: 600;
-        }
-
-        .badge-critica {
-            background: var(--critical);
-            color: #ffffff;
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-size: 0.72rem;
-            font-weight: 700;
         }
 
         .task-title {
@@ -339,17 +360,24 @@
             white-space: pre-line;
         }
 
-        .alert-box {
-            background: #fffbeb;
-            border: 1px solid #fde68a;
-            border-radius: 8px;
-            padding: 10px 12px;
+        .timeline-details {
             margin-top: 12px;
-            font-size: 0.8rem;
-            color: #92400e;
-            line-height: 1.4;
-            white-space: pre-line;
+            border-top: 1px dashed var(--border);
+            padding-top: 8px;
         }
+
+        .timeline-details summary {
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: var(--accent);
+            list-style: none;
+        }
+
+        .timeline-details summary::-webkit-details-marker { display: none; }
+        .timeline-details summary::before { content: "▸ "; }
+        .timeline-details[open] summary::before { content: "▾ "; }
+        .timeline-details[open] summary { margin-bottom: 6px; }
 
         .task-footer {
             background: #f9fafb;
@@ -357,10 +385,20 @@
             font-size: 0.75rem;
             color: var(--text-muted);
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
             border-top: 1px solid var(--border);
         }
+
+        .notebook-link {
+            color: var(--accent);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .notebook-link:hover { text-decoration: underline; }
 
         .whatsapp-btn-float {
             background: #25D366;
@@ -494,19 +532,14 @@
     <div id="toast" class="copy-toast">✅ Reporte copiado. ¡Listo para pegar en WhatsApp!</div>
 
     <script>
-        // Enlace adaptado automáticamente a formato de datos CSV en tiempo real
+        // Enlace CSV publicado de tu Google Sheet
         const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTm39JoPL_ALWNas06bX0MRdf7Q5p6iI-_lavSBn7krkvY1JqPBILANTeGl9BjBxQ/pub?output=csv';
 
-        // Palabras clave usadas SOLO cuando no existe una columna explícita de criticidad,
-        // para no dejar gestiones importantes sin marcar. Ajusta esta lista a tu criterio.
+        // Respaldo SOLO si la columna CRÍTICA viene vacía en una fila.
         const PALABRAS_CRITICAS = ['urgente', 'vencid', 'bloque', 'riesgo alto', 'crítico', 'critico', 'inminente', 'sin respuesta', 'escalad', 'paraliza'];
+        const VALORES_CERRADO = ['cerrad', 'concluid', 'mitigad', 'atendido', 'resuelto', 'finalizad'];
 
-        const VALORES_CRITICO_SI = ['SI', 'SÍ', 'X', 'ALTA', 'ALTO', 'CRÍTICA', 'CRITICA', 'CRÍTICO', 'CRITICO', 'TRUE', '1'];
-        const VALORES_CERRADO = ['concluid', 'mitigad', 'cerrad', 'atendido', 'resuelto', 'finalizad'];
-        const VALORES_ALERTA = ['inspecc', 'alerta', 'pago', 'pendiente'];
-
-        let listaGestiones = [];        // filas crudas del CSV (para el reporte de WhatsApp)
-        let gestionesProcesadas = [];   // filas ya normalizadas, ordenadas y listas para pintar
+        let gestionesProcesadas = [];   // filas normalizadas, ordenadas y listas para pintar
         let estructuraActiva = 'all';
         let soloCriticas = false;
         let ocultarCerradas = false;
@@ -518,8 +551,7 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: function(results) {
-                        listaGestiones = results.data;
-                        procesarGestiones(listaGestiones);
+                        procesarGestiones(results.data);
                         renderizarDashboard();
                     },
                     error: function(err) {
@@ -533,7 +565,27 @@
         }
 
         function limpia(valor) {
-            return (valor || '').toString().trim();
+            return (valor === null || valor === undefined) ? '' : valor.toString().trim();
+        }
+
+        // Los encabezados de Google Sheets pueden traer saltos de línea (ej. "FECHA\nÚLTIMA ACCIÓN").
+        // Se normalizan para poder ubicarlos sin importar cómo vengan formateados.
+        function normalizarClave(k) {
+            return k.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+        }
+
+        function obtenerCampo(itemNorm, nombres) {
+            for (const n of nombres) {
+                if (itemNorm[n] !== undefined) return limpia(itemNorm[n]);
+            }
+            return '';
+        }
+
+        function escapeHtml(str) {
+            return (str || '').toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
         }
 
         // Convierte cada fila cruda del Excel/CSV en un objeto normalizado con
@@ -545,26 +597,24 @@
             datos.forEach((item) => {
                 numeroFila++;
 
-                const ubicacion = limpia(item['UBICACIÓN'] || item['TAREAS ESTRUCTURA'] || item['ESTADO E25']) || 'General';
-                const tema = limpia(item['TEMA'] || item['TEMA / INTERVENCIÓN']);
-                const objetivo = limpia(item['OBJETIVO']);
-                const entidad = limpia(item['ENTIDAD']) || 'No especificada';
-                const plazo = limpia(item['PLAZO'] || item['FECHA INICIO']) || '-';
-                const estado = limpia(item['ESTADO'] || item['ESTADO OPERATIVO']) || 'En proceso';
-                const acciones = limpia(item['ACCIONES'] || item['ACCIONES EJECUTADAS']);
-                const alertas = limpia(item['REFERENCIA'] || item['ALERTAS']);
+                const itemNorm = {};
+                Object.keys(item).forEach(k => { itemNorm[normalizarClave(k)] = item[k]; });
 
-                // Última acción: usa una columna dedicada si existe en tu Excel;
-                // si no, toma la última línea del campo de acciones como aproximación.
-                let ultimaAccion = limpia(item['ÚLTIMA ACCIÓN'] || item['ULTIMA ACCION'] || item['ÚLTIMO AVANCE'] || item['ULTIMO AVANCE']);
-                if (!ultimaAccion && acciones) {
-                    const lineas = acciones.split('\n').map(l => l.trim()).filter(Boolean);
-                    ultimaAccion = lineas.length ? lineas[lineas.length - 1] : '';
-                }
-                const fechaUltimaAccion = limpia(item['FECHA ÚLTIMA ACCIÓN'] || item['FECHA ACTUALIZACIÓN'] || item['FECHA']);
+                const estructura = obtenerCampo(itemNorm, ['ESTRUCTURA']) || 'Sin estructura';
+                const tema = obtenerCampo(itemNorm, ['TEMA']);
+                const objetivo = obtenerCampo(itemNorm, ['OBJETIVO']);
+                const entidadRaw = obtenerCampo(itemNorm, ['ENTIDAD']) || 'No especificada';
+                const ultimaAccion = obtenerCampo(itemNorm, ['ÚLTIMA ACCIÓN', 'ULTIMA ACCION']);
+                const fechaUltimaAccion = obtenerCampo(itemNorm, ['FECHA ÚLTIMA ACCIÓN', 'FECHA ULTIMA ACCION']);
+                const plazo = obtenerCampo(itemNorm, ['PLAZO ATENDIDO', 'PLAZO']) || '-';
+                const acciones = obtenerCampo(itemNorm, ['ACCIONES']);
+                const lineaTiempo = obtenerCampo(itemNorm, ['LÍNEA DE TIEMPO', 'LINEA DE TIEMPO']);
+                const estado = obtenerCampo(itemNorm, ['ESTADO']) || 'En proceso';
+                const linkNotebook = obtenerCampo(itemNorm, ['LINK NOTEBOOK']);
+                const criticaTexto = obtenerCampo(itemNorm, ['CRÍTICA', 'CRITICA']);
 
                 // Fila vacía real -> se descarta
-                if (!tema && !objetivo && !acciones) return;
+                if (!tema && !objetivo && !acciones && !lineaTiempo) return;
 
                 // --- Estado / cierre ---
                 const estLower = estado.toLowerCase();
@@ -573,30 +623,34 @@
                 if (VALORES_CERRADO.some(k => estLower.includes(k))) {
                     estadoClass = 'status-success';
                     isCerrada = true;
-                } else if (VALORES_ALERTA.some(k => estLower.includes(k))) {
-                    estadoClass = 'status-warning';
-                } else {
+                } else if (/riesgo|urgente|cr[ií]tico|paraliza/.test(estLower)) {
                     estadoClass = 'status-danger';
+                } else if (/pendiente|alerta|espera/.test(estLower)) {
+                    estadoClass = 'status-warning';
                 }
 
                 // --- Criticidad ---
-                // 1) Si existe una columna explícita (CRÍTICA / PRIORIDAD / NIVEL DE RIESGO), se respeta tal cual.
-                // 2) Si no existe, se infiere por palabras clave en estado/alertas/tema (ajustable arriba).
-                const critFieldRaw = limpia(item['CRÍTICA'] || item['CRITICA'] || item['PRIORIDAD'] || item['NIVEL DE RIESGO']).toUpperCase();
-                let isCritica;
-                if (critFieldRaw) {
-                    isCritica = VALORES_CRITICO_SI.includes(critFieldRaw);
+                // Tu columna CRÍTICA trae texto libre (ej. "SI, pendiente de pago...").
+                // Se toma como crítica si empieza con SI/SÍ, y el resto del texto se
+                // guarda como "motivo" para mostrarlo en la tarjeta.
+                let isCritica = false;
+                let criticaMotivo = '';
+                if (criticaTexto) {
+                    isCritica = /^s[ií]/i.test(criticaTexto);
+                    if (isCritica) criticaMotivo = criticaTexto.replace(/^s[ií]\s*,?\s*/i, '').trim();
                 } else {
-                    const textoBusqueda = `${estado} ${alertas} ${tema}`.toLowerCase();
+                    const textoBusqueda = `${estado} ${lineaTiempo} ${tema}`.toLowerCase();
                     isCritica = PALABRAS_CRITICAS.some(p => textoBusqueda.includes(p));
                 }
                 // Una gestión ya cerrada no debería seguir mostrándose como crítica activa
                 if (isCerrada) isCritica = false;
 
+                const entidades = entidadRaw.split('\n').map(e => e.trim()).filter(Boolean);
+
                 gestionesProcesadas.push({
-                    numeroFila, ubicacion, tema, objetivo, entidad, plazo, estado,
-                    acciones, alertas, ultimaAccion, fechaUltimaAccion,
-                    estadoClass, isCerrada, isCritica
+                    numeroFila, estructura, tema, objetivo, entidades, plazo, estado,
+                    acciones, lineaTiempo, ultimaAccion, fechaUltimaAccion, linkNotebook,
+                    estadoClass, isCerrada, isCritica, criticaMotivo
                 });
             });
 
@@ -616,47 +670,53 @@
 
             let total = 0, concluidas = 0, proceso = 0, criticasAbiertas = 0;
             const entidadesSet = new Set();
-            const ubicacionesSet = new Set();
+            const estructurasSet = new Set();
 
             gestionesProcesadas.forEach(g => {
                 total++;
-                if (g.entidad && g.entidad !== 'No especificada') entidadesSet.add(g.entidad);
-                if (g.ubicacion) ubicacionesSet.add(g.ubicacion);
+                g.entidades.forEach(e => { if (e && e !== 'No especificada') entidadesSet.add(e); });
+                if (g.estructura) estructurasSet.add(g.estructura);
                 if (g.isCerrada) concluidas++; else proceso++;
                 if (g.isCritica && !g.isCerrada) criticasAbiertas++;
 
                 const card = document.createElement('div');
                 card.className = 'task-card' + (g.isCritica ? ' is-critica' : '') + (g.isCerrada ? ' is-cerrada' : '');
-                card.setAttribute('data-loc', g.ubicacion);
+                card.setAttribute('data-loc', g.estructura);
                 card.setAttribute('data-critica', g.isCritica ? '1' : '0');
                 card.setAttribute('data-cerrada', g.isCerrada ? '1' : '0');
 
+                const barLabel = g.isCritica ? '🔴 CRÍTICA' : (g.isCerrada ? '✅ CERRADA' : '🟦 EN GESTIÓN');
+
                 card.innerHTML = `
+                    <div class="card-structure-bar">
+                        <span>🏗️ ${escapeHtml(g.estructura)}</span>
+                        <span>${barLabel}</span>
+                    </div>
                     <div class="task-header">
                         <div>
                             <div class="task-meta">
-                                <span class="badge-loc">${g.ubicacion}</span>
-                                <span class="badge-entity">${g.entidad}</span>
-                                ${g.isCritica ? '<span class="badge-critica">🔴 CRÍTICA</span>' : ''}
+                                ${g.entidades.map(e => `<span class="badge-entity">${escapeHtml(e)}</span>`).join('')}
                             </div>
-                            <div class="task-title">${g.tema || 'Gestión Contractual'}</div>
+                            <div class="task-title">${escapeHtml(g.tema) || 'Gestión Contractual'}</div>
                         </div>
                         <div class="status-pills">
-                            <span class="status-pill ${g.estadoClass}">${g.estado}</span>
+                            <span class="status-pill ${g.estadoClass}">${escapeHtml(g.estado)}</span>
                         </div>
                     </div>
+                    ${g.isCritica && g.criticaMotivo ? `<div class="critica-motivo">⚠️ Motivo crítico: ${escapeHtml(g.criticaMotivo)}</div>` : ''}
                     ${g.ultimaAccion ? `
                     <div class="last-action-bar">
-                        <span class="tag">🕓 Última acción:</span> ${g.ultimaAccion}${g.fechaUltimaAccion ? ' <strong>(' + g.fechaUltimaAccion + ')</strong>' : ''}
+                        <span class="tag">🕓 Última acción:</span> ${escapeHtml(g.ultimaAccion)}${g.fechaUltimaAccion ? ' <strong>(' + escapeHtml(g.fechaUltimaAccion) + ')</strong>' : ''}
                     </div>` : ''}
                     <div class="task-body">
-                        ${g.objetivo ? `<div class="section-sub">Objetivo</div><p class="task-desc">${g.objetivo}</p>` : ''}
-                        ${g.acciones ? `<div class="section-sub">Acciones & Avance</div><p class="task-desc">${g.acciones}</p>` : ''}
-                        ${g.alertas && g.alertas !== '#VALUE!' ? `<div class="alert-box"><strong>📌 Observaciones / Próximos pasos:</strong><br>${g.alertas}</div>` : ''}
+                        ${g.objetivo ? `<div class="section-sub">Objetivo</div><p class="task-desc">${escapeHtml(g.objetivo)}</p>` : ''}
+                        ${g.acciones ? `<div class="section-sub">Acciones & Avance</div><p class="task-desc">${escapeHtml(g.acciones)}</p>` : ''}
+                        ${g.lineaTiempo ? `<details class="timeline-details"><summary>Ver línea de tiempo / historial completo</summary><p class="task-desc">${escapeHtml(g.lineaTiempo)}</p></details>` : ''}
                     </div>
                     <div class="task-footer">
-                        <span>Plazo / Compromiso: <strong>${g.plazo}</strong></span>
-                        <span>Gestión (fila Excel #${g.numeroFila})</span>
+                        <span>Plazo Atendido: <strong>${escapeHtml(g.plazo)}</strong></span>
+                        ${g.linkNotebook ? `<a href="${escapeHtml(g.linkNotebook)}" target="_blank" rel="noopener" class="notebook-link">📎 Notebook</a>` : ''}
+                        <span>Fila Excel #${g.numeroFila}</span>
                     </div>
                 `;
                 container.appendChild(card);
@@ -669,21 +729,21 @@
             document.getElementById('kpi-concluidas').innerText = concluidas;
             document.getElementById('kpi-entidades').innerText = entidadesSet.size;
 
-            // Botones de filtro por estructura
+            // Botones de filtro por estructura (orden alfabético para ubicarlas rápido)
             filterContainer.innerHTML = `<button class="filter-btn ${estructuraActiva === 'all' ? 'active' : ''}" onclick="setEstructura('all', this)">Todos (${total})</button>`;
-            ubicacionesSet.forEach(loc => {
+            Array.from(estructurasSet).sort().forEach(estr => {
                 const btn = document.createElement('button');
-                btn.className = 'filter-btn' + (estructuraActiva === loc ? ' active' : '');
-                btn.innerText = loc;
-                btn.onclick = function() { setEstructura(loc, this); };
+                btn.className = 'filter-btn' + (estructuraActiva === estr ? ' active' : '');
+                btn.innerText = estr;
+                btn.onclick = function() { setEstructura(estr, this); };
                 filterContainer.appendChild(btn);
             });
 
             aplicarFiltros();
         }
 
-        function setEstructura(ubicacion, btn) {
-            estructuraActiva = ubicacion;
+        function setEstructura(estructura, btn) {
+            estructuraActiva = estructura;
             document.querySelectorAll('#filter-container .filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             aplicarFiltros();
@@ -743,11 +803,12 @@
                 if (!lista.length) return;
                 texto += `*${titulo}*\n\n`;
                 lista.forEach((g, i) => {
-                    texto += `*${i + 1}. ${g.ubicacion} - ${g.tema}*\n`;
-                    if (g.entidad) texto += `• Entidad: ${g.entidad}\n`;
+                    texto += `*${i + 1}. ${g.estructura} - ${g.tema}*\n`;
+                    if (g.entidades.length) texto += `• Entidad: ${g.entidades.join(', ')}\n`;
                     texto += `• Estado: ${g.estado}\n`;
+                    if (g.isCritica && g.criticaMotivo) texto += `• Motivo crítico: ${g.criticaMotivo}\n`;
                     if (g.ultimaAccion) texto += `• Última acción: ${g.ultimaAccion}${g.fechaUltimaAccion ? ' (' + g.fechaUltimaAccion + ')' : ''}\n`;
-                    if (g.plazo && g.plazo !== '-') texto += `• Plazo: ${g.plazo}\n`;
+                    if (g.plazo && g.plazo !== '-') texto += `• Plazo atendido: ${g.plazo}\n`;
                     texto += `\n`;
                 });
             };
