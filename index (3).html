@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCM2L | Dashboard de Gestiones en Tiempo Real</title>
+    <!-- Librería PapaParse para procesamiento eficiente de datos en tiempo real -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        :root {
+            --primary: #003366;
+            --primary-dark: #002244;
+            --accent: #007acc;
+            --bg: #f4f6f9;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #4b5563;
+            --border: #e5e7eb;
+            --success-bg: #def7ec;
+            --success-text: #03543f;
+            --warning-bg: #fef08a;
+            --warning-text: #713f12;
+            --danger-bg: #fde8e8;
+            --danger-text: #9b1c1c;
+            --info-bg: #e1effe;
+            --info-text: #1e429f;
+            --critical: #e02424;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            padding-bottom: 40px;
+        }
+
+        .app-header {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+            color: #ffffff;
+            padding: 16px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .header-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .header-title p {
+            font-size: 0.8rem;
+            opacity: 0.85;
+        }
+
+        .header-badge {
+            background: rgba(255,255,255,0.18);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid rgba(255,255,255,0.25);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #25D366;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .status-dot { animation: none; }
+            * { transition: none !important; }
+        }
+
+        .main-container {
+            max-width: 1000px;
+            margin: 15px auto;
+            padding: 0 16px;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        @media (min-width: 700px) {
+            .kpi-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            padding: 14px;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--accent);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .kpi-card.kpi-danger { border-left-color: var(--critical); }
+        .kpi-card.kpi-warning { border-left-color: #d97706; }
+        .kpi-card.kpi-success { border-left-color: #057a55; }
+
+        .kpi-title {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .kpi-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin: 4px 0;
+        }
+
+        .kpi-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .filter-group-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin: 4px 0 6px 2px;
+        }
+
+        .filter-section {
+            margin-bottom: 10px;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding-bottom: 6px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .toggle-section {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:focus-visible, .whatsapp-btn-float:focus-visible {
+            outline: 3px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
+        }
+
+        .filter-btn.toggle-critica.active {
+            background: var(--critical);
+            border-color: var(--critical);
+        }
+
+        .filter-btn.toggle-cerradas.active {
+            background: var(--text-muted);
+            border-color: var(--text-muted);
+        }
+
+        .task-card {
+            background: var(--card-bg);
+            border-radius: 14px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+            border-left: 4px solid transparent;
+            overflow: hidden;
+        }
+
+        .task-card.is-critica {
+            border-left-color: var(--critical);
+        }
+
+        .task-card.is-cerrada {
+            opacity: 0.72;
+        }
+
+        .task-card.is-cerrada.is-critica {
+            opacity: 0.85;
+        }
+
+        .task-header {
+            padding: 14px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid var(--border);
+            background: #fafbfc;
+            gap: 10px;
+        }
+
+        .task-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            flex-wrap: wrap;
+        }
+
+        .badge-loc {
+            background: #1e3a8a;
+            color: #ffffff;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .badge-entity {
+            background: #e5e7eb;
+            color: #374151;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+
+        .badge-critica {
+            background: var(--critical);
+            color: #ffffff;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .task-title {
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+            line-height: 1.3;
+        }
+
+        .status-pills {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: flex-end;
+        }
+
+        .status-pill {
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-success { background: var(--success-bg); color: var(--success-text); }
+        .status-warning { background: var(--warning-bg); color: var(--warning-text); }
+        .status-danger { background: var(--danger-bg); color: var(--danger-text); }
+        .status-info { background: var(--info-bg); color: var(--info-text); }
+
+        .last-action-bar {
+            padding: 10px 16px;
+            background: #eef4fb;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--primary-dark);
+            line-height: 1.4;
+        }
+
+        .last-action-bar .tag {
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .task-body {
+            padding: 14px 16px;
+        }
+
+        .section-sub {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-top: 10px;
+            margin-bottom: 4px;
+        }
+
+        .task-desc {
+            font-size: 0.85rem;
+            color: #4b5563;
+            line-height: 1.45;
+            white-space: pre-line;
+        }
+
+        .alert-box {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-top: 12px;
+            font-size: 0.8rem;
+            color: #92400e;
+            line-height: 1.4;
+            white-space: pre-line;
+        }
+
+        .task-footer {
+            background: #f9fafb;
+            padding: 10px 16px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border);
+        }
+
+        .whatsapp-btn-float {
+            background: #25D366;
+            color: #ffffff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+            cursor: pointer;
+            width: 100%;
+            margin-top: 16px;
+        }
+
+        .copy-toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 12px;
+            position: fixed;
+            z-index: 200;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            font-size: 0.85rem;
+        }
+
+        .copy-toast.show {
+            visibility: visible;
+            animation: fadein 0.3s, fadeout 0.3s 2.2s;
+        }
+
+        @keyframes fadein { from { bottom: 0; opacity: 0; } to { bottom: 30px; opacity: 1; } }
+        @keyframes fadeout { from { bottom: 30px; opacity: 1; } to { bottom: 0; opacity: 0; } }
+
+        .loading-box {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .empty-box {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px dashed var(--border);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="app-header">
+        <div class="header-container">
+            <div class="header-title">
+                <h1>CCM2L | CONTROL DE GESTIONES</h1>
+                <p>Permisos de Obra & Interferencias</p>
+            </div>
+            <div class="header-badge">
+                <span class="status-dot"></span> En Vivo
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+
+        <!-- KPIs Dinámicos -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-title">Gestiones Totales</div>
+                <div class="kpi-value" id="kpi-total">-</div>
+                <div class="kpi-desc">Total en seguimiento</div>
+            </div>
+            <div class="kpi-card kpi-danger">
+                <div class="kpi-title">Críticas Abiertas</div>
+                <div class="kpi-value" id="kpi-criticas">-</div>
+                <div class="kpi-desc">Requieren atención inmediata</div>
+            </div>
+            <div class="kpi-card kpi-warning">
+                <div class="kpi-title">En Proceso / Trámite</div>
+                <div class="kpi-value" id="kpi-proceso">-</div>
+                <div class="kpi-desc">Atención en curso</div>
+            </div>
+            <div class="kpi-card kpi-success">
+                <div class="kpi-title">Mitigadas / Cierres</div>
+                <div class="kpi-value" id="kpi-concluidas">-</div>
+                <div class="kpi-desc">Riesgos eliminados</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Entidades</div>
+                <div class="kpi-value" id="kpi-entidades">-</div>
+                <div class="kpi-desc">Involucradas</div>
+            </div>
+        </div>
+
+        <!-- Filtro por estructura -->
+        <div class="filter-group-label">Filtrar por estructura</div>
+        <div class="filter-section" id="filter-container">
+            <button class="filter-btn active" onclick="setEstructura('all', this)">Todos</button>
+        </div>
+
+        <!-- Filtros de prioridad / estado -->
+        <div class="toggle-section">
+            <button class="filter-btn toggle-critica" id="btn-solo-criticas" onclick="toggleSoloCriticas()">🔴 Solo críticas</button>
+            <button class="filter-btn toggle-cerradas" id="btn-ocultar-cerradas" onclick="toggleOcultarCerradas()">🗂️ Ocultar cerradas</button>
+        </div>
+
+        <!-- Contenedor dinámico de tarjetas -->
+        <div id="tasks-container">
+            <div class="loading-box">⏳ Conectando y cargando gestiones en tiempo real...</div>
+        </div>
+
+        <!-- Botón para copiar reporte a WhatsApp -->
+        <button class="whatsapp-btn-float" onclick="copiarWhatsApp()">
+            📋 Copiar Reporte Ejecutivo para WhatsApp
+        </button>
+
+    </div>
+
+    <div id="toast" class="copy-toast">✅ Reporte copiado. ¡Listo para pegar en WhatsApp!</div>
+
+    <script>
+        // Enlace adaptado automáticamente a formato de datos CSV en tiempo real
+        const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTm39JoPL_ALWNas06bX0MRdf7Q5p6iI-_lavSBn7krkvY1JqPBILANTeGl9BjBxQ/pub?output=csv';
+
+        // Palabras clave usadas SOLO cuando no existe una columna explícita de criticidad,
+        // para no dejar gestiones importantes sin marcar. Ajusta esta lista a tu criterio.
+        const PALABRAS_CRITICAS = ['urgente', 'vencid', 'bloque', 'riesgo alto', 'crítico', 'critico', 'inminente', 'sin respuesta', 'escalad', 'paraliza'];
+
+        const VALORES_CRITICO_SI = ['SI', 'SÍ', 'X', 'ALTA', 'ALTO', 'CRÍTICA', 'CRITICA', 'CRÍTICO', 'CRITICO', 'TRUE', '1'];
+        const VALORES_CERRADO = ['concluid', 'mitigad', 'cerrad', 'atendido', 'resuelto', 'finalizad'];
+        const VALORES_ALERTA = ['inspecc', 'alerta', 'pago', 'pendiente'];
+
+        let listaGestiones = [];        // filas crudas del CSV (para el reporte de WhatsApp)
+        let gestionesProcesadas = [];   // filas ya normalizadas, ordenadas y listas para pintar
+        let estructuraActiva = 'all';
+        let soloCriticas = false;
+        let ocultarCerradas = false;
+
+        async function cargarDatos() {
+            try {
+                Papa.parse(GOOGLE_SHEET_CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        listaGestiones = results.data;
+                        procesarGestiones(listaGestiones);
+                        renderizarDashboard();
+                    },
+                    error: function(err) {
+                        document.getElementById('tasks-container').innerHTML =
+                            `<div class="loading-box" style="color:#c5221f;">❌ Error al sincronizar con Google Sheets. Verifique la conexión a internet.</div>`;
+                    }
+                });
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        }
+
+        function limpia(valor) {
+            return (valor || '').toString().trim();
+        }
+
+        // Convierte cada fila cruda del Excel/CSV en un objeto normalizado con
+        // toda la información necesaria para pintar la tarjeta y para ordenar/filtrar.
+        function procesarGestiones(datos) {
+            gestionesProcesadas = [];
+            let numeroFila = 0;
+
+            datos.forEach((item) => {
+                numeroFila++;
+
+                const ubicacion = limpia(item['UBICACIÓN'] || item['TAREAS ESTRUCTURA'] || item['ESTADO E25']) || 'General';
+                const tema = limpia(item['TEMA'] || item['TEMA / INTERVENCIÓN']);
+                const objetivo = limpia(item['OBJETIVO']);
+                const entidad = limpia(item['ENTIDAD']) || 'No especificada';
+                const plazo = limpia(item['PLAZO'] || item['FECHA INICIO']) || '-';
+                const estado = limpia(item['ESTADO'] || item['ESTADO OPERATIVO']) || 'En proceso';
+                const acciones = limpia(item['ACCIONES'] || item['ACCIONES EJECUTADAS']);
+                const alertas = limpia(item['REFERENCIA'] || item['ALERTAS']);
+
+                // Última acción: usa una columna dedicada si existe en tu Excel;
+                // si no, toma la última línea del campo de acciones como aproximación.
+                let ultimaAccion = limpia(item['ÚLTIMA ACCIÓN'] || item['ULTIMA ACCION'] || item['ÚLTIMO AVANCE'] || item['ULTIMO AVANCE']);
+                if (!ultimaAccion && acciones) {
+                    const lineas = acciones.split('\n').map(l => l.trim()).filter(Boolean);
+                    ultimaAccion = lineas.length ? lineas[lineas.length - 1] : '';
+                }
+                const fechaUltimaAccion = limpia(item['FECHA ÚLTIMA ACCIÓN'] || item['FECHA ACTUALIZACIÓN'] || item['FECHA']);
+
+                // Fila vacía real -> se descarta
+                if (!tema && !objetivo && !acciones) return;
+
+                // --- Estado / cierre ---
+                const estLower = estado.toLowerCase();
+                let estadoClass = 'status-info';
+                let isCerrada = false;
+                if (VALORES_CERRADO.some(k => estLower.includes(k))) {
+                    estadoClass = 'status-success';
+                    isCerrada = true;
+                } else if (VALORES_ALERTA.some(k => estLower.includes(k))) {
+                    estadoClass = 'status-warning';
+                } else {
+                    estadoClass = 'status-danger';
+                }
+
+                // --- Criticidad ---
+                // 1) Si existe una columna explícita (CRÍTICA / PRIORIDAD / NIVEL DE RIESGO), se respeta tal cual.
+                // 2) Si no existe, se infiere por palabras clave en estado/alertas/tema (ajustable arriba).
+                const critFieldRaw = limpia(item['CRÍTICA'] || item['CRITICA'] || item['PRIORIDAD'] || item['NIVEL DE RIESGO']).toUpperCase();
+                let isCritica;
+                if (critFieldRaw) {
+                    isCritica = VALORES_CRITICO_SI.includes(critFieldRaw);
+                } else {
+                    const textoBusqueda = `${estado} ${alertas} ${tema}`.toLowerCase();
+                    isCritica = PALABRAS_CRITICAS.some(p => textoBusqueda.includes(p));
+                }
+                // Una gestión ya cerrada no debería seguir mostrándose como crítica activa
+                if (isCerrada) isCritica = false;
+
+                gestionesProcesadas.push({
+                    numeroFila, ubicacion, tema, objetivo, entidad, plazo, estado,
+                    acciones, alertas, ultimaAccion, fechaUltimaAccion,
+                    estadoClass, isCerrada, isCritica
+                });
+            });
+
+            // Orden solicitado: abiertas antes que cerradas; dentro de cada grupo,
+            // las críticas van primero. Se mantiene el orden original del Excel como desempate.
+            gestionesProcesadas.sort((a, b) => {
+                if (a.isCerrada !== b.isCerrada) return a.isCerrada ? 1 : -1;
+                if (a.isCritica !== b.isCritica) return a.isCritica ? -1 : 1;
+                return a.numeroFila - b.numeroFila;
+            });
+        }
+
+        function renderizarDashboard() {
+            const container = document.getElementById('tasks-container');
+            const filterContainer = document.getElementById('filter-container');
+            container.innerHTML = '';
+
+            let total = 0, concluidas = 0, proceso = 0, criticasAbiertas = 0;
+            const entidadesSet = new Set();
+            const ubicacionesSet = new Set();
+
+            gestionesProcesadas.forEach(g => {
+                total++;
+                if (g.entidad && g.entidad !== 'No especificada') entidadesSet.add(g.entidad);
+                if (g.ubicacion) ubicacionesSet.add(g.ubicacion);
+                if (g.isCerrada) concluidas++; else proceso++;
+                if (g.isCritica && !g.isCerrada) criticasAbiertas++;
+
+                const card = document.createElement('div');
+                card.className = 'task-card' + (g.isCritica ? ' is-critica' : '') + (g.isCerrada ? ' is-cerrada' : '');
+                card.setAttribute('data-loc', g.ubicacion);
+                card.setAttribute('data-critica', g.isCritica ? '1' : '0');
+                card.setAttribute('data-cerrada', g.isCerrada ? '1' : '0');
+
+                card.innerHTML = `
+                    <div class="task-header">
+                        <div>
+                            <div class="task-meta">
+                                <span class="badge-loc">${g.ubicacion}</span>
+                                <span class="badge-entity">${g.entidad}</span>
+                                ${g.isCritica ? '<span class="badge-critica">🔴 CRÍTICA</span>' : ''}
+                            </div>
+                            <div class="task-title">${g.tema || 'Gestión Contractual'}</div>
+                        </div>
+                        <div class="status-pills">
+                            <span class="status-pill ${g.estadoClass}">${g.estado}</span>
+                        </div>
+                    </div>
+                    ${g.ultimaAccion ? `
+                    <div class="last-action-bar">
+                        <span class="tag">🕓 Última acción:</span> ${g.ultimaAccion}${g.fechaUltimaAccion ? ' <strong>(' + g.fechaUltimaAccion + ')</strong>' : ''}
+                    </div>` : ''}
+                    <div class="task-body">
+                        ${g.objetivo ? `<div class="section-sub">Objetivo</div><p class="task-desc">${g.objetivo}</p>` : ''}
+                        ${g.acciones ? `<div class="section-sub">Acciones & Avance</div><p class="task-desc">${g.acciones}</p>` : ''}
+                        ${g.alertas && g.alertas !== '#VALUE!' ? `<div class="alert-box"><strong>📌 Observaciones / Próximos pasos:</strong><br>${g.alertas}</div>` : ''}
+                    </div>
+                    <div class="task-footer">
+                        <span>Plazo / Compromiso: <strong>${g.plazo}</strong></span>
+                        <span>Gestión (fila Excel #${g.numeroFila})</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            // KPIs
+            document.getElementById('kpi-total').innerText = total;
+            document.getElementById('kpi-criticas').innerText = criticasAbiertas;
+            document.getElementById('kpi-proceso').innerText = proceso;
+            document.getElementById('kpi-concluidas').innerText = concluidas;
+            document.getElementById('kpi-entidades').innerText = entidadesSet.size;
+
+            // Botones de filtro por estructura
+            filterContainer.innerHTML = `<button class="filter-btn ${estructuraActiva === 'all' ? 'active' : ''}" onclick="setEstructura('all', this)">Todos (${total})</button>`;
+            ubicacionesSet.forEach(loc => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn' + (estructuraActiva === loc ? ' active' : '');
+                btn.innerText = loc;
+                btn.onclick = function() { setEstructura(loc, this); };
+                filterContainer.appendChild(btn);
+            });
+
+            aplicarFiltros();
+        }
+
+        function setEstructura(ubicacion, btn) {
+            estructuraActiva = ubicacion;
+            document.querySelectorAll('#filter-container .filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            aplicarFiltros();
+        }
+
+        function toggleSoloCriticas() {
+            soloCriticas = !soloCriticas;
+            document.getElementById('btn-solo-criticas').classList.toggle('active', soloCriticas);
+            aplicarFiltros();
+        }
+
+        function toggleOcultarCerradas() {
+            ocultarCerradas = !ocultarCerradas;
+            document.getElementById('btn-ocultar-cerradas').classList.toggle('active', ocultarCerradas);
+            aplicarFiltros();
+        }
+
+        function aplicarFiltros() {
+            const cards = document.querySelectorAll('.task-card');
+            let visibles = 0;
+            cards.forEach(c => {
+                const coincideLoc = estructuraActiva === 'all' || c.getAttribute('data-loc') === estructuraActiva;
+                const coincideCritica = !soloCriticas || c.getAttribute('data-critica') === '1';
+                const coincideCerrada = !ocultarCerradas || c.getAttribute('data-cerrada') === '0';
+                const mostrar = coincideLoc && coincideCritica && coincideCerrada;
+                c.style.display = mostrar ? 'block' : 'none';
+                if (mostrar) visibles++;
+            });
+
+            const container = document.getElementById('tasks-container');
+            let emptyMsg = document.getElementById('empty-filter-msg');
+            if (visibles === 0) {
+                if (!emptyMsg) {
+                    emptyMsg = document.createElement('div');
+                    emptyMsg.id = 'empty-filter-msg';
+                    emptyMsg.className = 'empty-box';
+                    emptyMsg.innerText = 'No hay gestiones que coincidan con este filtro.';
+                    container.appendChild(emptyMsg);
+                }
+            } else if (emptyMsg) {
+                emptyMsg.remove();
+            }
+        }
+
+        function copiarWhatsApp() {
+            if (gestionesProcesadas.length === 0) return;
+
+            const abiertasCriticas = gestionesProcesadas.filter(g => !g.isCerrada && g.isCritica);
+            const abiertasResto = gestionesProcesadas.filter(g => !g.isCerrada && !g.isCritica);
+            const cerradas = gestionesProcesadas.filter(g => g.isCerrada);
+
+            let texto = `*🚆 CCM2L | REPORTE EJECUTIVO DE GESTIONES*\n`;
+            texto += `📅 *Actualizado:* En tiempo real\n`;
+            texto += `👤 *Área:* Permisos\n\n`;
+
+            const escribirBloque = (titulo, lista) => {
+                if (!lista.length) return;
+                texto += `*${titulo}*\n\n`;
+                lista.forEach((g, i) => {
+                    texto += `*${i + 1}. ${g.ubicacion} - ${g.tema}*\n`;
+                    if (g.entidad) texto += `• Entidad: ${g.entidad}\n`;
+                    texto += `• Estado: ${g.estado}\n`;
+                    if (g.ultimaAccion) texto += `• Última acción: ${g.ultimaAccion}${g.fechaUltimaAccion ? ' (' + g.fechaUltimaAccion + ')' : ''}\n`;
+                    if (g.plazo && g.plazo !== '-') texto += `• Plazo: ${g.plazo}\n`;
+                    texto += `\n`;
+                });
+            };
+
+            escribirBloque('🔴 CRÍTICAS ABIERTAS', abiertasCriticas);
+            escribirBloque('🟡 EN PROCESO', abiertasResto);
+            escribirBloque('✅ CERRADAS / MITIGADAS', cerradas);
+
+            navigator.clipboard.writeText(texto.trim()).then(() => {
+                const toast = document.getElementById("toast");
+                toast.className = "copy-toast show";
+                setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 2500);
+            });
+        }
+
+        // Ejecución automática al abrir la web
+        window.onload = cargarDatos;
+    </script>
+</body>
+</html>
