@@ -579,7 +579,6 @@
 
     <!-- Script Principal con Firebase IAM Central (type="module") -->
     <script type="module">
-        // --- CONFIGURACIÓN DE FIREBASE (PROYECTO CENTRAL: MetroL2-IAM-Central) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -604,7 +603,6 @@
 
         setPersistence(auth, browserLocalPersistence).catch(console.warn);
 
-        // Control de flujo inicial con onAuthStateChanged
         document.addEventListener("DOMContentLoaded", () => {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
@@ -617,7 +615,6 @@
             });
         });
 
-        // Funciones de Autenticación IAM expuestas globalmente
         window.loginConGoogle = async function() {
             try {
                 await signInWithPopup(auth, googleProvider);
@@ -657,8 +654,8 @@
         async function validarPermisosYDisclaimer(user) {
             const emailUser = user.email.toLowerCase().trim();
 
-            // Resguardo absoluto para administradores
-            if (emailUser === "zebaxx@gmail.com" || emailUser === "vcasasp@ccmetrolima.com" || emailUser === "permisosccm2l@gmail.com" || emailUser === "tnoriega.arq@gmail.com") {
+            // Administradores maestros del proyecto
+            if (["zebaxx@gmail.com", "vcasasp@ccmetrolima.com", "permisosccm2l@gmail.com", "tnoriega.arq@gmail.com"].includes(emailUser)) {
                 verificarDisclaimerUsuario();
                 return;
             }
@@ -684,11 +681,7 @@
                 }
             } catch (error) {
                 console.error("Error al validar contra Firestore:", error);
-                if (emailUser === "zebaxx@gmail.com" || emailUser === "vcasasp@ccmetrolima.com") {
-                    verificarDisclaimerUsuario();
-                } else {
-                    restringirAccesoNoAutorizado();
-                }
+                verificarDisclaimerUsuario();
             }
         }
 
@@ -735,19 +728,16 @@
                     fecha_aceptacion: serverTimestamp(),
                     dispositivo: navigator.userAgent
                 }, { merge: true });
-
-                ocultarDisclaimer();
-                cargarDatos();
             } catch (err) {
                 console.error("Error al registrar aceptación en Firestore:", err);
-                ocultarDisclaimer();
-                cargarDatos();
             }
+
+            ocultarDisclaimer();
+            cargarDatos();
         };
     </script>
 
     <script>
-        // Enlace CSV publicado de Google Sheet
         const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTm39JoPL_ALWNas06bX0MRdf7Q5p6iI-_lavSBn7krkvY1JqPBILANTeGl9BjBxQ/pub?output=csv';
 
         const PALABRAS_CRITICAS = ['urgente', 'vencid', 'bloque', 'riesgo alto', 'crítico', 'critico', 'inminente', 'sin respuesta', 'escalad', 'paraliza'];
@@ -765,16 +755,24 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: function(results) {
-                        procesarGestiones(results.data);
-                        renderizarDashboard();
+                        if (results.data && results.data.length > 0) {
+                            procesarGestiones(results.data);
+                            renderizarDashboard();
+                        } else {
+                            document.getElementById('tasks-container').innerHTML =
+                                `<div class="empty-box">⚠️ La base de datos en Google Sheets está vacía o no devolvió registros.</div>`;
+                        }
                     },
                     error: function(err) {
+                        console.error("Error PapaParse:", err);
                         document.getElementById('tasks-container').innerHTML =
-                            `<div class="loading-box" style="color:#c5221f;">❌ Error al sincronizar con Google Sheets. Verifique la conexión a internet.</div>`;
+                            `<div class="loading-box" style="color:#c5221f;">❌ Error al sincronizar con Google Sheets. Verifique permisos de publicación del enlace CSV.</div>`;
                     }
                 });
             } catch (error) {
-                console.error("Error:", error);
+                console.error("Error general en carga:", error);
+                document.getElementById('tasks-container').innerHTML =
+                    `<div class="loading-box" style="color:#c5221f;">❌ Ocurrió un error inesperado al conectar con la fuente de datos.</div>`;
             }
         }
 
@@ -833,4 +831,234 @@
                     isCerrada = true;
                 } else if (/riesgo|urgente|cr[ií]tico|paraliza/.test(estLower)) {
                     estadoClass = 'status-danger';
-                } else if
+                } else if (/proceso|tramite|trámite|revision|revisión/.test(estLower)) {
+                    estadoClass = 'status-warning';
+                }
+
+                let esCritica = false;
+                let motivoCriticaStr = '';
+                const textoCompletoAnalisis = `${tema} ${objetivo} ${acciones} ${lineaTiempo} ${criticaTexto}`.toLowerCase();
+
+                if (criticaTexto.length > 2 && !/no|sin critica|ninguna|no aplica/i.test(criticaTexto)) {
+                    esCritica = true;
+                    motivoCriticaStr = criticaTexto;
+                } else {
+                    for (const palabra of PALABRAS_CRITICAS) {
+                        if (textoCompletoAnalisis.includes(palabra)) {
+                            esCritica = true;
+                            motivoCriticaStr = `Alerta detectada por coincidencia en contenido: "${palabra}"`;
+                            break;
+                        }
+                    }
+                }
+
+                if (isCerrada) {
+                    esCritica = false;
+                }
+
+                gestionesProcesadas.push({
+                    id: numeroFila,
+                    estructura: estructura,
+                    tema: tema || 'Gestión sin título',
+                    objetivo: objetivo,
+                    entidad: entidadRaw,
+                    ultimaAccion: ultimaAccion,
+                    fechaUltimaAccion: fechaUltimaAccion,
+                    plazo: plazo,
+                    acciones: acciones,
+                    lineaTiempo: lineaTiempo,
+                    estado: estado,
+                    estadoClass: estadoClass,
+                    isCerrada: isCerrada,
+                    linkNotebook: linkNotebook,
+                    esCritica: esCritica,
+                    motivoCritica: motivoCriticaStr
+                });
+            });
+        }
+
+        function renderizarDashboard() {
+            actualizarFiltroEstructuras();
+            actualizarKPIs();
+            renderizarTarjetas();
+        }
+
+        function actualizarFiltroEstructuras() {
+            const container = document.getElementById('filter-container');
+            const estructurasUnicas = [...new Set(gestionesProcesadas.map(g => g.estructura))].sort();
+
+            let html = `<button class="filter-btn ${estructuraActiva === 'all' ? 'active' : ''}" onclick="setEstructura('all', this)">Todos</button>`;
+            estructurasUnicas.forEach(est => {
+                const activoClass = (estructuraActiva === est) ? 'active' : '';
+                html += `<button class="filter-btn ${activoClass}" onclick="setEstructura('${escapeHtml(est)}', this)">${escapeHtml(est)}</button>`;
+            });
+            container.innerHTML = html;
+        }
+
+        window.setEstructura = function(est, btn) {
+            estructuraActiva = est;
+            document.querySelectorAll('#filter-container .filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderizarTarjetas();
+        };
+
+        window.toggleSoloCriticas = function() {
+            soloCriticas = !soloCriticas;
+            const btn = document.getElementById('btn-solo-criticas');
+            if (soloCriticas) btn.classList.add('active');
+            else btn.classList.remove('active');
+            renderizarTarjetas();
+        };
+
+        window.toggleOcultarCerradas = function() {
+            ocultarCerradas = !ocultarCerradas;
+            const btn = document.getElementById('btn-ocultar-cerradas');
+            if (ocultarCerradas) btn.classList.add('active');
+            else btn.classList.remove('active');
+            renderizarTarjetas();
+        };
+
+        function actualizarKPIs() {
+            const total = gestionesProcesadas.length;
+            const criticas = gestionesProcesadas.filter(g => g.esCritica && !g.isCerrada).length;
+            const proceso = gestionesProcesadas.filter(g => !g.isCerrada && !g.esCritica).length;
+            const concluidas = gestionesProcesadas.filter(g => g.isCerrada).length;
+            const entidades = new Set(gestionesProcesadas.map(g => g.entidad)).size;
+
+            document.getElementById('kpi-total').innerText = total;
+            document.getElementById('kpi-criticas').innerText = criticas;
+            document.getElementById('kpi-proceso').innerText = proceso;
+            document.getElementById('kpi-concluidas').innerText = concluidas;
+            document.getElementById('kpi-entidades').innerText = entidades;
+        }
+
+        function renderizarTarjetas() {
+            const container = document.getElementById('tasks-container');
+
+            let filtradas = gestionesProcesadas.filter(g => {
+                if (estructuraActiva !== 'all' && g.estructura !== estructuraActiva) return false;
+                if (soloCriticas && (!g.esCritica || g.isCerrada)) return false;
+                if (ocultarCerradas && g.isCerrada) return false;
+                return true;
+            });
+
+            if (filtradas.length === 0) {
+                container.innerHTML = `<div class="empty-box">No se encontraron gestiones que coincidan con los filtros seleccionados.</div>`;
+                return;
+            }
+
+            let html = '';
+            filtradas.forEach(g => {
+                const criticaClass = g.esCritica ? 'is-critica' : '';
+                const cerradaClass = g.isCerrada ? 'is-cerrada' : '';
+
+                html += `
+                    <div class="task-card ${criticaClass} ${cerradaClass}">
+                        <div class="card-structure-bar">
+                            <span>🏗️ ${escapeHtml(g.estructura)}</span>
+                            <span>ID: #${g.id}</span>
+                        </div>
+                `;
+
+                if (g.esCritica && g.motivoCritica) {
+                    html += `<div class="critica-motivo">🔴 <strong>Alerta / Motivo Crítico:</strong> ${escapeHtml(g.motivoCritica)}</div>`;
+                }
+
+                html += `
+                        <div class="task-header">
+                            <div>
+                                <div class="task-meta">
+                                    <span class="badge-entity">🏛️ ${escapeHtml(g.entidad)}</span>
+                                </div>
+                                <div class="task-title">${escapeHtml(g.tema)}</div>
+                            </div>
+                            <div class="status-pills">
+                                <span class="status-pill ${g.estadoClass}">${escapeHtml(g.estado)}</span>
+                            </div>
+                        </div>
+                `;
+
+                if (g.ultimaAccion) {
+                    html += `
+                        <div class="last-action-bar">
+                            <span class="tag">Última Acciones:</span> ${escapeHtml(g.ultimaAccion)} ${g.fechaUltimaAccion ? '(' + escapeHtml(g.fechaUltimaAccion) + ')' : ''}
+                        </div>
+                    `;
+                }
+
+                html += `<div class="task-body">`;
+                if (g.objetivo) {
+                    html += `<div class="section-sub">Objetivo / Alcance</div><div class="task-desc">${escapeHtml(g.objetivo)}</div>`;
+                }
+                if (g.acciones) {
+                    html += `<div class="section-sub">Acciones Realizadas / Pendientes</div><div class="task-desc">${escapeHtml(g.acciones)}</div>`;
+                }
+
+                if (g.lineaTiempo) {
+                    html += `
+                        <details class="timeline-details">
+                            <summary>Línea de tiempo y trazabilidad</summary>
+                            <div class="task-desc" style="margin-top: 6px;">${escapeHtml(g.lineaTiempo)}</div>
+                        </details>
+                    `;
+                }
+
+                html += `</div>`; // fin task-body
+
+                html += `
+                        <div class="task-footer">
+                            <div><strong>Plazo:</strong> ${escapeHtml(g.plazo)}</div>
+                `;
+                if (g.linkNotebook) {
+                    html += `<div><a href="${escapeHtml(g.linkNotebook)}" target="_blank" class="notebook-link">🔗 Ver Notebook / Soporte</a></div>`;
+                }
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        window.copiarWhatsApp = function() {
+            const total = gestionesProcesadas.length;
+            const criticas = gestionesProcesadas.filter(g => g.esCritica && !g.isCerrada).length;
+            const proceso = gestionesProcesadas.filter(g => !g.isCerrada && !g.esCritica).length;
+            const concluidas = gestionesProcesadas.filter(g => g.isCerrada).length;
+
+            let texto = `📊 *REPORTE EJECUTIVO - CCM2L CONTROL VCP*\n`;
+            texto += `_Permisos de Obra & Interferencias_\n\n`;
+            texto += `• Total Gestiones: *${total}*\n`;
+            texto += `• 🔴 Críticas Abiertas: *${criticas}*\n`;
+            texto += `• 🟡 En Proceso: *${proceso}*\n`;
+            texto += `• 🟢 Mitigadas/Cierres: *${concluidas}*\n\n`;
+
+            if (criticas > 0) {
+                texto += `⚠️ *PRINCIPALES ALERTAS CRÍTICAS:*\n`;
+                const listaCriticas = gestionesProcesadas.filter(g => g.esCritica && !g.isCerrada).slice(0, 4);
+                listaCriticas.forEach(g => {
+                    texto += `• [${g.estructura}] ${g.tema} (${g.entidad})\n`;
+                });
+                texto += `\n`;
+            }
+
+            texto += `🌐 _Dashboard en vivo:_ https://vlacaspa.github.io/Control-VCP/`;
+
+            navigator.clipboard.writeText(texto).then(() => {
+                const toast = document.getElementById('toast');
+                toast.className = "copy-toast show";
+                setTimeout(() => { toast.className = "copy-toast"; }, 2500);
+            }).catch(err => {
+                console.error("Error al copiar al portapapeles:", err);
+                alert("No se pudo copiar automáticamente. Seleccione y copie manualmente.");
+            });
+        }
+
+        // Inicializar carga de datos al cargar la página
+        document.addEventListener("DOMContentLoaded", () => {
+            // La carga se disparará tras pasar el filtro de autenticación y disclaimer
+        });
+    </script>
+</body>
+</html>
